@@ -1,0 +1,46 @@
+{
+  "name": "dsh-workbench",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness 个人工作台插件：以 todo 为核心，自动收集任务、灵感和待验收结果。",
+  "type": "module",
+  "private": true,
+  "main": "src/host.js",
+  "exports": {
+    ".": "./src/host.js",
+    "./client": "./dist/client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "inject": ["@deepseek-ai/dsh-client-runtime"]
+    }
+  },
+  "engines": {
+    "node": ">=20",
+    "dsh": ">=0.2.1-rc.5 <0.3.0"
+  },
+  "keywords": ["dsh", "deepseek-harness", "dsh-plugin", "workbench", "todo"],
+  "license": "MIT",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "watch": "node scripts/build.mjs --watch",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.10"
+  },
+  "files": [
+    "src",
+    "dist",
+    "locale",
+    "scripts",
+    "test",
+    "cordis.patch.yml",
+    "icon.svg",
+    "README.md"
+  ]
+}

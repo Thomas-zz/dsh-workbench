@@ -1,0 +1,10 @@
+# dsh-workbench bundle patch：同一个包提供 host 半片与浏览器半片
+- insert:
+    - id: workbench
+      name: 'dsh-workbench'
+      # 可选行配置示例（默认值即可运行）：
+      # config:
+      #   watchJobs: true          # 收集后台 job 完成事件
+      #   briefingHour: 9          # 晨报推送整点（0-23，晚启动补发）
+      #   briefingSessionId: ''    # 晨报目标会话；缺省自动取最近活跃的工作台会话
+      #   briefingPush: true       # false 时关闭会话推送（面板晨报卡不受影响）
