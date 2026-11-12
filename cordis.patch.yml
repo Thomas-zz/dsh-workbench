@@ -8,3 +8,6 @@
       #   briefingHour: 9          # 晨报推送整点（0-23，晚启动补发）
       #   briefingSessionId: ''    # 晨报目标会话；缺省自动取最近活跃的工作台会话
       #   briefingPush: true       # false 时关闭会话推送（面板晨报卡不受影响）
+      #   learnVaultPath: '/Users/zhangzhiyuan/Documents/zzy/Fighting for Wealth'
+      #                             # 旧版兼容配置；面板「学习 → 设置」里的库路径优先
+      # 学习模块的库路径、笔记目录、整理时间与扫描源在面板「学习 → 设置」里改，存 state 即时生效。

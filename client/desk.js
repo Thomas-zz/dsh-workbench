@@ -101,6 +101,58 @@ export const promoteIdea = (id, title) => dispatchOps([{ op: 'promote_idea', id,
 export const dropIdea = (id) => dispatchOps([{ op: 'drop_idea', id }], { label: '丢弃灵感' })
 export const decideReview = (id, action, taskTitle) => dispatchOps([{ op: 'decide_review', id, action, ...(taskTitle ? { taskTitle } : {}) }], { label: '处置验收' })
 
+// —— 学习模块动作 ——
+export const learnCapture = (question, context) => dispatchOps([{ op: 'learn_capture', question, context, source: 'ui' }], { label: '记录学习提问' })
+export const learnDropInbox = (id) => dispatchOps([{ op: 'learn_drop_inbox', id }], { label: '丢弃学习提问' })
+export const learnDecide = (id, action, title) => dispatchOps([{ op: 'learn_decide', id, action }], { label: `处置学习「${(title || '').slice(0, 16)}」` })
+export async function learnSetConfig(patch) {
+  try {
+    await request('learn/validate-storage', { vaultPath: patch.vaultPath, notesDir: patch.notesDir })
+    return dispatchOps([{ op: 'learn_config', patch }], { label: '学习设置' })
+  } catch (err) {
+    report(err)
+    return null
+  }
+}
+export const learnArm = (sessionId, on) => dispatchOps([{ op: 'learn_arm', sessionId, on }], { label: on ? '开启学习记录' : '关闭学习记录', undoable: false })
+
+/** 拉学习候选预览（Host 侧 60 秒缓存，纯代码零模型成本）。 */
+export async function learnPreview() {
+  return request('learn/preview')
+}
+
+export async function learnModels() {
+  return request('learn/models')
+}
+
+/** 立即整理：向目标会话推学习整理触发卡。 */
+export async function learnRunNow() {
+  try {
+    const data = await request('learn/run-now', {})
+    toast(t('已推送到会话，整理结果稍后出现在学习视图'))
+    return data
+  } catch (err) {
+    report(err)
+    return null
+  }
+}
+
+/** 打开一条学习笔记（Obsidian URI 由 Host 生成）。 */
+export async function openLearnNote(notePath) {
+  try {
+    const data = await request(`learn/uri?path=${encodeURIComponent(notePath)}`)
+    // 保持控制台页面；使用带绝对路径的已验证 URI。
+    const link = document.createElement('a')
+    link.href = data.uri
+    link.target = '_blank'
+    link.rel = 'noopener'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    toast(t('已请求打开 Obsidian；如未响应，请在本机检查应用关联。'))
+  } catch (err) { report(err) }
+}
+
 /** 本地日期串 YYYY-MM-DD（宿主按本地日算「今天」，UTC 切片会在午夜前后错判）。 */
 export function localToday(now = new Date()) {
   const pad = (n) => String(n).padStart(2, '0')
@@ -161,3 +213,23 @@ export function ensurePolling() {
     stopPolling = null
   }
 }
+
+export async function exploreLearn(entryId, question, quote = '') {
+  try {
+    const result = await request('learn/explore', { entryId, question, quote })
+    await loadDesk()
+    if (result.error) toast(`会话已创建，但未开始回答：${result.error}`, { error: true })
+    return result
+  } catch (err) { report(err); return null }
+}
+export async function highlightLearn(entryId, text) {
+  try { await request('learn/highlight', { entryId, text }); await loadDesk(); toast('划线已保存'); return true }
+  catch (err) { report(err); return false }
+}
+export async function syncLearn(entryId) {
+  try { await request('learn/sync', { entryId }); await loadDesk(); toast('笔记已同步') }
+  catch (err) { report(err) }
+}
+export const learnReports = () => request('learn/reports')
+export const readLearnReport = (id) => request(`learn/report?id=${encodeURIComponent(id)}`)
+export const readLearnNote = (id) => request(`learn/note?id=${encodeURIComponent(id)}`)

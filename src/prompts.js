@@ -1,5 +1,6 @@
 // 系统提示：静态行为规则（section）+ 每步刷新的活状态（context）。
 import { countsOf } from './ops.js'
+import { LEARN_POLICY_TEXT } from './learn/tools.js'
 
 const POLICY_TEXT = `# 个人工作台（workbench）
 
@@ -11,7 +12,9 @@ const POLICY_TEXT = `# 个人工作台（workbench）
 - **停靠灵感**：对话中出现与当前任务无关的灵光一现（用户提起或你自己想到），调用 workbench_capture_idea 一句话停靠，然后继续原任务；不要顺着灵感切换上下文，除非用户明确要求现在就做。
 - **查询优先**：用户问今天做什么、什么没做完、待验收有什么、灵感有哪些时，先 workbench_query 再回答；给建议时按「待验收 → 今天到期 → 受阻 → 进行中」排序。
 - **收拢验收**：每回合收尾前，若运行时上下文显示待验收 > 0，主动向用户提一句（或直接代为查看并处置：workbench_review）。
-- 并行做多件事是常态：允许同时存在多个 doing，不要催用户聚焦到单一任务。`
+- 并行做多件事是常态：允许同时存在多个 doing，不要催用户聚焦到单一任务。
+
+${LEARN_POLICY_TEXT}`
 
 function statusText(state) {
   if (!state) return ''

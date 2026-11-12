@@ -1,22 +1,24 @@
 // dsh-workbench 浏览器半片：侧栏入口 + main 全局面板 + 会话内停靠条。
 import React from 'react'
 import css from './styles.css'
-import { ensurePolling, loadDesk, refreshQuiet, setDesk, todaySections, undo, useDesk } from './desk.js'
+import { ensurePolling, loadDesk, learnArm, refreshQuiet, setDesk, todaySections, undo, useDesk } from './desk.js'
 import { setLanguage, t } from './i18n.js'
 import { setNav } from './nav.js'
-import { SessionTasksBar } from './dock.jsx'
+import { SessionTasksCard } from './dock.jsx'
 import { AllView } from './views/all.jsx'
 import { InboxView } from './views/inbox.jsx'
+import { LearnView } from './views/learn.jsx'
 import { TodayView } from './views/today.jsx'
 import { Empty, IconButton, Icon, Toast } from './ui.jsx'
 
 const PANEL_ID = 'workbench'
 
-const VIEWS = { today: TodayView, all: AllView, inbox: InboxView }
+const VIEWS = { today: TodayView, all: AllView, inbox: InboxView, learn: LearnView }
 const TABS = [
   ['today', '今天', 'calendar'],
   ['all', '全部', 'inbox'],
   ['inbox', '收件箱', 'star'],
+  ['learn', '学习', 'focus'],
 ]
 
 function Workbench() {
@@ -30,6 +32,7 @@ function Workbench() {
 
   const pendingReviews = state?.reviews?.filter((row) => row.status === 'pending').length ?? 0
   const parkedIdeas = state?.ideas?.filter((row) => row.status === 'parked').length ?? 0
+  const pendingLearn = state?.learn?.inbox?.length ?? 0
   const { sections, doneToday, today } = state ? todaySections(state) : { sections: [], doneToday: [], today: '' }
   const todayCount = sections.reduce((sum, section) => sum + section.tasks.length, 0)
 
@@ -45,7 +48,8 @@ function Workbench() {
         },
           t(label),
           id === 'today' && todayCount ? React.createElement('i', { className: 'wb-badge' }, todayCount) : null,
-          id === 'inbox' && pendingReviews ? React.createElement('i', { className: 'wb-badge is-warn' }, pendingReviews) : null))),
+          id === 'inbox' && pendingReviews ? React.createElement('i', { className: 'wb-badge is-warn' }, pendingReviews) : null,
+          id === 'learn' && pendingLearn ? React.createElement('i', { className: 'wb-badge is-warn' }, pendingLearn) : null))),
       React.createElement('span', { style: { flex: 1 } }),
       canUndo ? React.createElement(IconButton, { icon: 'undo', label: t('撤销'), onClick: undo }) : null,
       React.createElement(IconButton, { icon: 'refresh', label: t('刷新'), onClick: refreshQuiet })),
@@ -94,11 +98,30 @@ export function apply(ctx) {
   }
   setNav({ openSession, sessionLabel })
 
+  // /学习任务 指令：武装当前会话，下一条消息零成本记录为学习提问（Host pre-step 拦截）
+  const commandUi = typeof ctx.get === 'function' ? ctx.get('commandUi') : undefined
+  if (commandUi && typeof commandUi.register === 'function') {
+    ctx.effect(() => commandUi.register({
+      name: '学习任务',
+      label: () => t('学习任务：下一条消息零成本记为学习提问'),
+      description: () => t('开启后，本会话你发送的下一条消息会被直接记录为学习提问（不触发模型回复），记录会在每晚整理时写进 Obsidian。'),
+      available: () => true,
+      ui: {
+        kind: 'action',
+        run: (session) => {
+          const sessionId = typeof session?.sessionId === 'string' ? session.sessionId : ''
+          if (!sessionId) return
+          void learnArm(sessionId, true)
+        },
+      },
+    }), 'dsh-workbench: learn command')
+  }
+
   ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: PANEL_ID }, Workbench))
-  // 会话内未完结投影：停靠在对话输入区，inject 回调按会话传参
+  // 会话内未完结投影：卡片浮在对话区左上角，inject 回调按会话传参
   ctx.slots.inject('conversation.input.dock', () => ctx.slots.register(
     { name: 'conversation.input.dock', id: 'workbench-open', order: 30, inject: (sessionId) => ({ sessionId: String(sessionId ?? '') }) },
-    SessionTasksBar,
+    SessionTasksCard,
   ))
   ctx.effect(() => {
     let release = null

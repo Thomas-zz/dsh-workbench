@@ -15,7 +15,7 @@ test('空目录初始化出完整结构并落盘', async () => {
   const { store, dir } = await tempStore()
   try {
     const state = await store.read()
-    assert.deepEqual(Object.keys(state).sort(), ['flags', 'ideas', 'reviews', 'schemaVersion', 'tasks'])
+    assert.deepEqual(Object.keys(state).sort(), ['flags', 'ideas', 'learn', 'reviews', 'schemaVersion', 'tasks'])
     assert.equal(state.schemaVersion, 1)
     const raw = JSON.parse(await readFile(join(dir, 'state.json'), 'utf8'))
     assert.equal(raw.schemaVersion, 1)
@@ -25,13 +25,13 @@ test('空目录初始化出完整结构并落盘', async () => {
   }
 })
 
-test('mutate 串行写入、单步撤销、非撤销操作不占位', async () => {
+test('mutate 串行写入、单步撤销、后续后台变更使旧快照失效', async () => {
   const { store, dir } = await tempStore()
   try {
     await store.mutate('加一', (draft) => { draft.tasks.push({ id: 't1', title: '任务一', status: 'todo' }) })
     assert.equal(store.canUndo(), true)
     await store.mutate('非撤销', (draft) => { draft.tasks.push({ id: 't2', title: '任务二', status: 'todo' }) }, { undoable: false })
-    assert.equal(store.canUndo(), true)
+    assert.equal(store.canUndo(), false)
     await store.mutate('加三', (draft) => { draft.tasks.push({ id: 't3', title: '任务三', status: 'todo' }) })
     const label = await store.undoLast()
     assert.equal(label, '加三')

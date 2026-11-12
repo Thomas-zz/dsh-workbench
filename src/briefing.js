@@ -92,8 +92,8 @@ export function resolveBriefingTarget(config, state) {
   return best === null ? null : best.id
 }
 
-/** 把晨报作为触发卡送进目标会话（照 offpeak-queue runner 的唤醒写法）。 */
-async function pushBriefing(ctx, sessionId, text) {
+/** 把一段文本作为触发卡送进目标会话（照 offpeak-queue runner 的唤醒写法；学习模块复用）。 */
+export async function pushSessionCard(ctx, sessionId, text, selection) {
   const resolved = await ctx.sessionController.resolveAgent(sessionId)
   if (resolved === undefined || resolved === null || 'error' in resolved) {
     throw resolved?.error ?? new Error('会话不存在或不可恢复')
@@ -101,6 +101,10 @@ async function pushBriefing(ctx, sessionId, text) {
   const agent = resolved.agent
   if (agent === undefined || agent === null || typeof agent.followup !== 'function') {
     throw new Error('会话不可用，无法推送')
+  }
+  if (selection) {
+    if (typeof agent.model?.select !== 'function') throw new Error('当前 DSH 不支持会话模型选择，请升级后重试')
+    agent.model.select(selection)
   }
   agent.followup({
     id: randomUUID(),
@@ -145,7 +149,7 @@ export function startBriefing(ctx, store, config = {}) {
         return
       }
       const briefing = buildBriefing(state, now)
-      await pushBriefing(ctx, target, briefing.text)
+      await pushSessionCard(ctx, target, briefing.text)
     } catch (err) {
       console.error('workbench: 晨报推送失败', err)
     }

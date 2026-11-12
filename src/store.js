@@ -78,7 +78,7 @@ export class Store {
         const after = JSON.stringify(this.state)
         // 什么都没改的操作不占撤销位；单步撤销：任何后续可撤销操作都会覆盖它，
         // 因此撤销目标永远是「最近一次修改之前」的状态，回退总是安全的。
-        if (after !== before) this.undo = { label, before }
+        if (after !== before) this.undo = { label, before, after }
       }
       await this.persist()
       return result
@@ -86,7 +86,7 @@ export class Store {
   }
 
   canUndo() {
-    return this.undo !== null
+    return this.undo !== null && JSON.stringify(this.state) === this.undo.after
   }
 
   undoLast() {
@@ -95,6 +95,7 @@ export class Store {
       if (!entry) return null
       this.undo = null
       await this.refresh()
+      if (JSON.stringify(this.state) !== entry.after) throw new Error('已有新的记录或外部更新，无法撤销旧快照；当前内容已保留')
       this.state = migrateState(JSON.parse(entry.before))
       await this.persist()
       return entry.label
