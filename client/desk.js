@@ -1,0 +1,279 @@
+// 浏览器侧的状态：Host 状态的本地镜像 + 只属于界面的选中、视图、轮询。
+import React from 'react'
+import { t } from './i18n.js'
+import { calendarDate, dayTasks, openTask, personalState } from '../src/planner.js'
+
+const BASE = 'wb/'
+const POLL_MS = 15_000
+
+let snapshot = {
+  state: null, canUndo: false, error: null, view: 'today',
+  expandedId: null, captureKind: 'idea', filter: '', toastObj: null, refreshing: false,
+}
+const listeners = new Set()
+
+export function getDesk() {
+  return snapshot
+}
+
+export function setDesk(patch) {
+  if (patch?.state) patch = { ...patch, state: personalState(patch.state) }
+  snapshot = { ...snapshot, ...(typeof patch === 'function' ? patch(snapshot) : patch) }
+  listeners.forEach((fn) => fn())
+}
+
+function subscribe(fn) {
+  listeners.add(fn)
+  return () => listeners.delete(fn)
+}
+
+export function useDesk(selector) {
+  return React.useSyncExternalStore(subscribe, () => selector(snapshot))
+}
+
+async function request(path, body) {
+  const res = await fetch(BASE + path, body === undefined ? {} : {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `请求失败（${res.status}）`)
+  return data
+}
+
+let toastTimer = null
+export function toast(text, { error = false } = {}) {
+  clearTimeout(toastTimer)
+  setDesk({ toastObj: { text, error, key: Date.now() } })
+  toastTimer = setTimeout(() => setDesk({ toastObj: null }), 3200)
+}
+
+function report(err) {
+  toast(err.message || String(err), { error: true })
+}
+
+export async function loadDesk() {
+  try {
+    const data = await request('state')
+    setDesk({ state: data.state, canUndo: data.canUndo, error: null })
+  } catch (err) {
+    setDesk({ error: err.message })
+  }
+}
+
+export async function refreshQuiet() {
+  try {
+    const data = await request('state')
+    if (!getDesk().error) setDesk({ state: data.state, canUndo: data.canUndo })
+    else setDesk({ state: data.state, canUndo: data.canUndo, error: null })
+  } catch {
+    // 轮询失败不打扰，下一轮再试
+  }
+}
+
+export async function refreshDesk() {
+  if (getDesk().refreshing) return
+  setDesk({ refreshing: true })
+  try {
+    const data = await request('state')
+    setDesk({ state: data.state, canUndo: data.canUndo, error: null })
+    toast('工作台已刷新')
+  } catch (error) { report(error) }
+  finally { setDesk({ refreshing: false }) }
+}
+
+export async function dispatchOps(ops, { label = '操作', undoable = true, silent = false } = {}) {
+  try {
+    const data = await request('ops', { ops, label, undoable })
+    setDesk({ state: data.state, canUndo: data.canUndo })
+    if (data.errors?.length) toast(data.errors[0], { error: true })
+    else if (!silent && data.receipts?.[0]) toast(data.receipts[0].text)
+    return data
+  } catch (err) {
+    report(err)
+    return null
+  }
+}
+
+export async function undo() {
+  try {
+    const data = await request('undo', {})
+    setDesk({ state: data.state, canUndo: data.canUndo, toastObj: null, planDropMessage: '' })
+    if (data.label) toast(t('已撤销：{label}', { label: data.label }))
+  } catch (err) {
+    report(err)
+  }
+}
+
+// —— 高层动作 ——
+export const addTask = (patch, label) => dispatchOps([{ op: 'add_task', ...patch }], { label })
+export const updateTask = (id, patch, label) => dispatchOps([{ op: 'update_task', id, ...patch }], { label })
+export const setTaskStatus = (id, status, title) => dispatchOps([{ op: 'update_task', id, status }], { label: `${status === 'done' ? '完成' : '更新'}「${(title || '').slice(0, 16)}」` })
+export const deleteTask = (id, title) => dispatchOps([{ op: 'delete_task', id }], { label: `删除「${(title || '').slice(0, 16)}」` })
+export const captureIdea = (text, note) => dispatchOps([{ op: 'capture_idea', text, note, source: 'ui' }], { label: '停靠灵感' })
+export const promoteIdea = (id, title) => dispatchOps([{ op: 'promote_idea', id, ...(title ? { title } : {}) }], { label: '灵感转任务' })
+export const dropIdea = (id) => dispatchOps([{ op: 'drop_idea', id }], { label: '丢弃灵感' })
+export const decideReview = (id, action, taskTitle) => dispatchOps([{ op: 'decide_review', id, action, ...(taskTitle ? { taskTitle } : {}) }], { label: '处置验收' })
+
+// —— 学习模块动作 ——
+export const learnCapture = (question, context) => dispatchOps([{ op: 'learn_capture', question, context, source: 'ui' }], { label: '记录学习提问' })
+export const learnDropInbox = (id) => dispatchOps([{ op: 'learn_drop_inbox', id }], { label: '丢弃学习提问' })
+export const learnDecide = (id, action, title) => dispatchOps([{ op: 'learn_decide', id, action }], { label: `处置学习「${(title || '').slice(0, 16)}」` })
+export async function learnSetConfig(patch) {
+  try {
+    await request('learn/validate-storage', { vaultPath: patch.vaultPath, notesDir: patch.notesDir })
+    return dispatchOps([{ op: 'learn_config', patch }], { label: '学习设置' })
+  } catch (err) {
+    report(err)
+    return null
+  }
+}
+export const learnArm = (sessionId, on) => dispatchOps([{ op: 'learn_arm', sessionId, on }], { label: on ? '开启学习记录' : '关闭学习记录', undoable: false })
+
+/** 拉学习候选预览（Host 侧 60 秒缓存，纯代码零模型成本）。 */
+export async function learnPreview() {
+  return request('learn/preview')
+}
+
+export async function learnModels() {
+  return request('learn/models')
+}
+
+/** 立即整理：向目标会话推学习整理触发卡。 */
+export function learnScope(options) {
+  return request(`learn/scope?${new URLSearchParams(options)}`)
+}
+
+export async function learnRunNow(options = {}) {
+  if (getDesk().organizationPending?.learn) return
+  setDesk(s => ({organizationPending:{...s.organizationPending,learn:true}}))
+  try {
+    const data = await request('learn/run-now', options)
+    await refreshQuiet()
+    toast(data.busy ? '学习整理仍在执行' : '学习整理已开始')
+    return data
+  } catch (err) {
+    report(err)
+    return null
+  } finally {
+    setDesk(s => ({organizationPending:{...s.organizationPending,learn:false}}))
+  }
+}
+
+/** 打开一条学习笔记（Obsidian URI 由 Host 生成）。 */
+export async function openLearnNote(notePath) {
+  try {
+    const data = await request(`learn/uri?path=${encodeURIComponent(notePath)}`)
+    // 保持控制台页面；使用带绝对路径的已验证 URI。
+    const link = document.createElement('a')
+    link.href = data.uri
+    link.target = '_blank'
+    link.rel = 'noopener'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    toast(t('已请求打开 Obsidian；如未响应，请在本机检查应用关联。'))
+  } catch (err) { report(err) }
+}
+
+/** 本地日期串 YYYY-MM-DD（宿主按本地日算「今天」，UTC 切片会在午夜前后错判）。 */
+export function localToday(now = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+}
+
+/** ISO 时间戳的本地日期串。 */
+export function localDateOf(iso) {
+  const date = new Date(iso)
+  return Number.isNaN(date.getTime()) ? '' : localToday(date)
+}
+
+/** 今天视图（客户端镜像版：进行中 ∪ 今天及以前到期 ∪ 焦点；section 带稳定 key）。 */
+export function todaySections(state, now = new Date()) {
+  if (state.plan) {
+    const today = calendarDate(now, state.plan.config.timezone)
+    const rows = dayTasks(state, today).filter((t) => !t.movedTo)
+    const tasks = rows.filter(openTask)
+    return { today, sections: tasks.length ? [{ key: 'planned', title: '今天安排', tasks }] : [], doneToday: rows.filter((t) => t.status === 'done') }
+  }
+  const today = localToday(now)
+  const active = (row) => row.status !== 'done'
+  const sections = []
+  const seen = new Set()
+  const push = (key, title, rows) => {
+    const fresh = rows.filter((row) => { if (seen.has(row.id)) return false; seen.add(row.id); return true })
+    if (fresh.length) sections.push({ key, title, tasks: fresh })
+  }
+  push('doing', '进行中', state.tasks.filter((row) => active(row) && row.status === 'doing'))
+  push('due', '今天到期', state.tasks.filter((row) => active(row) && row.due && row.due <= today).sort((a, b) => (a.due < b.due ? -1 : 1)))
+  push('focus', '焦点', state.tasks.filter((row) => active(row) && row.focus && row.status !== 'doing' && !(row.due && row.due <= today)))
+  const doneToday = state.tasks.filter((row) => row.status === 'done' && row.completedAt && localDateOf(row.completedAt) === today)
+  return { sections, doneToday, today }
+}
+
+/** 相对时间。 */
+export function ago(iso, now = Date.now()) {
+  const ms = now - Date.parse(iso)
+  if (!Number.isFinite(ms) || ms < 60_000) return '刚刚'
+  if (ms < 3_600_000) return t('{n} 分钟前', { n: Math.floor(ms / 60_000) })
+  if (ms < 86_400_000) return t('{n} 小时前', { n: Math.floor(ms / 3_600_000) })
+  return t('{n} 天前', { n: Math.floor(ms / 86_400_000) })
+}
+
+/** 开始轮询（agent 在会话里写，面板要跟上），返回停止函数。 */
+export function startPolling() {
+  let lastPoll = Date.now(), fetching = false
+  const timer = setInterval(async () => {
+    const active = Boolean(getDesk().state?.plan?.organizer?.lease || getDesk().state?.mail?.lease || Object.values(getDesk().state?.assistant?.sessions || {}).some(row => row.status === 'running'))
+    if (fetching || (!active && Date.now() - lastPoll < POLL_MS)) return
+    fetching = true
+    try { await refreshQuiet() } finally { lastPoll = Date.now(); fetching = false }
+  }, 1000)
+  const onVisible = () => { if (document.visibilityState === 'visible') refreshQuiet() }
+  document.addEventListener('visibilitychange', onVisible)
+  return () => { clearInterval(timer); document.removeEventListener('visibilitychange', onVisible) }
+}
+
+// 面板与各会话的停靠条都要最新状态，用引用计数共享一份轮询。
+let pollUsers = 0
+let stopPolling = null
+
+/** 挂载的消费者（面板、dock）各自调用；最后一个卸载时停止轮询。 */
+export function ensurePolling() {
+  if (pollUsers++ === 0) stopPolling = startPolling()
+  return () => {
+    if (--pollUsers > 0) return
+    pollUsers = 0
+    stopPolling?.()
+    stopPolling = null
+  }
+}
+
+export async function exploreLearn(entryId, question, quote = '') {
+  try {
+    const result = await request('learn/explore', { entryId, question, quote })
+    await loadDesk()
+    if (result.error) toast(`会话已创建，但未开始回答：${result.error}`, { error: true })
+    return result
+  } catch (err) { report(err); return null }
+}
+export async function highlightLearn(entryId, text) {
+  try { await request('learn/highlight', { entryId, text }); await loadDesk(); toast('划线已保存'); return true }
+  catch (err) { report(err); return false }
+}
+export async function syncLearn(entryId) {
+  try { await request('learn/sync', { entryId }); await loadDesk(); toast('笔记已同步') }
+  catch (err) { report(err) }
+}
+export const learnReports = () => request('learn/reports')
+export const readLearnReport = (id) => request(`learn/report?id=${encodeURIComponent(id)}`)
+export const readLearnNote = (id) => request(`learn/note?id=${encodeURIComponent(id)}`)
+
+export async function runPlanOrganizer(options = {}) {
+  if (getDesk().organizationPending?.tasks) return
+  setDesk(s => ({organizationPending:{...s.organizationPending,tasks:true}}))
+  try { const data = await request('plan/run-now', options); await refreshQuiet(); toast('事项整理已开始'); return data }
+  catch (err) { report(err); return null }
+  finally { setDesk(s => ({organizationPending:{...s.organizationPending,tasks:false}})) }
+}
+
+export const workbenchRequest = request

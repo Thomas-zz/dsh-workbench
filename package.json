@@ -1,0 +1,77 @@
+{
+  "name": "dsh-workbench",
+  "version": "0.2.0",
+  "description": "DeepSeek Harness 个人工作台：日周月计划、自动顺延、后台收集排期与学习。",
+  "type": "module",
+  "private": true,
+  "main": "src/host.js",
+  "exports": {
+    ".": "./src/host.js",
+    "./client": "./dist/client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime"
+      ]
+    }
+  },
+  "engines": {
+    "node": ">=20.19.0",
+    "dsh": ">=0.2.1-rc.5 <0.3.0"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "dsh-plugin",
+    "workbench",
+    "todo"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "watch": "node scripts/build.mjs --watch",
+    "test": "node --test",
+    "preview": "node scripts/preview.mjs",
+    "dev:web": "node scripts/dev-web.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.10",
+    "prettier": "^3.6.2",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "files": [
+    "src",
+    "dist",
+    "locale",
+    "scripts/wb.mjs",
+    "scripts/learn.mjs",
+    "scripts/feedback.mjs",
+    "scripts/calendar.mjs",
+    "scripts/mail.mjs",
+    "cordis.patch.yml",
+    "icon.svg",
+    "README.md",
+    "DEVELOPMENT.md",
+    "docs/feishu-agent-setup.md",
+    "docs/mail-agent-setup.md",
+    "docs/projects-events-mail-validation-20261113.md",
+    "docs/task-first-validation-20261113.md"
+  ],
+  "dependencies": {
+    "imapflow": "^2.11.0",
+    "mailparser": "^3.14.3"
+  },
+  "bundleDependencies": [
+    "imapflow",
+    "mailparser"
+  ]
+}

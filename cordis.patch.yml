@@ -1,0 +1,13 @@
+# dsh-workbench bundle patch：同一个包提供 host 半片与浏览器半片
+- insert:
+    - id: workbench
+      name: 'dsh-workbench'
+      # 可选行配置示例（默认值即可运行）：
+      # config:
+      #   watchJobs: true          # 收集后台 job 完成事件
+      #   briefingHour: 9          # 晨报推送整点（0-23，晚启动补发）
+      #   briefingSessionId: ''    # 晨报目标会话；缺省自动取最近活跃的工作台会话
+      #   briefingPush: false      # 默认关闭；true 时才向会话推送晨报
+      #   learnVaultPath: ''
+      #                             # 旧版兼容配置；面板「学习 → 设置」里的库路径优先
+      # 学习模块的库路径、笔记目录、整理时间与扫描源在面板「学习 → 设置」里改，存 state 即时生效。

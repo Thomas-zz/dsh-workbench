@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- 个人工作台：左侧任务清单 + 右侧汇聚的验收点 -->
+  <defs>
+    <linearGradient id="wb-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2b5f8f"/>
+      <stop offset="1" stop-color="#173a5c"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="6" width="36" height="52" rx="7" fill="url(#wb-bg)"/>
+  <g stroke="#eaf2f9" stroke-width="3.2" stroke-linecap="round" fill="none">
+    <path d="M13 19.5l3.4 3.6 6-6.6"/>
+    <line x1="27.5" y1="19.5" x2="33" y2="19.5" opacity="0.85"/>
+    <path d="M13 31.5l3.4 3.6 6-6.6" opacity="0.9"/>
+    <line x1="27.5" y1="31.5" x2="33" y2="31.5" opacity="0.75"/>
+    <path d="M13 43.5l3.4 3.6 6-6.6" opacity="0.8"/>
+    <line x1="27.5" y1="43.5" x2="33" y2="43.5" opacity="0.65"/>
+  </g>
+  <circle cx="47.5" cy="44.5" r="12.5" fill="#f5b431"/>
+  <circle cx="47.5" cy="44.5" r="12.5" fill="none" stroke="#173a5c" stroke-width="2.4"/>
+  <path d="M41.8 44.8l4 4.2 7.6-8.6" fill="none" stroke="#173a5c" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
