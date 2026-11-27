@@ -288,6 +288,12 @@
   padding: 0 17px 12px;
   gap: 8px;
 }
+.pd-pool-organize {
+  align-self: flex-start;
+  margin: 0 14px 10px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
 .pd-pool-week > button {
   font-size: 20px;
   padding: 0 7px;

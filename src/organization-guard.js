@@ -2,6 +2,7 @@ import { automaticModelAllowed, shouldRotateSession } from './assistant.js'
 
 import { organizationProgress } from './organization-progress.js'
 
+const followupTools = ['workbench_query']
 const allowed = {
   tasks: ['workbench_organize_inspect', 'workbench_organize_submit'],
   learn: [
@@ -45,7 +46,7 @@ export function installOrganizationGuard(
       run.agent.cancel({ kind: 'hook', reason })
     } finally {
       run.onStop?.(new Error(reason))
-      recordEnd(run, reason)
+      if (!run.followup) recordEnd(run, reason)
     }
   }
   function arm(
@@ -57,6 +58,7 @@ export function installOrganizationGuard(
       automatic = false,
       submitOnly = false,
       scopeStarted = false,
+      followup = false,
     } = {},
   ) {
     if (disposed) throw new Error('宿主已停止，未启动整理')
@@ -68,8 +70,9 @@ export function installOrganizationGuard(
     const id = agent.session.id
     if (active.has(id)) throw new Error('原整理回合尚未结束')
     // Estimates already carry their material and do not register an inspect tool.
-    const tools =
-      kind === 'tasks' && submitOnly
+    const tools = followup
+      ? followupTools
+      : kind === 'tasks' && submitOnly
         ? ['workbench_organize_submit']
         : allowed[kind]
     const unrestrict = agent.ctx.tools.restrict({ allow: tools })
@@ -83,6 +86,7 @@ export function installOrganizationGuard(
       unrestrict,
       tools,
       scopeStarted,
+      followup,
       observe: organizationProgress(),
       gotResult: false,
       advanced: false,
@@ -95,7 +99,7 @@ export function installOrganizationGuard(
     active.set(id, run)
     return run
   }
-  // Also protect a restored chat or a person typing directly in the learning chat.
+  // Admit a fresh human message only in a currently bound chat.
   // Never recreate a budget for an orphaned continuation or an assistant/tool message.
   on('agent/pre-step', async ({ agent, messages, turn, step }, next) => {
     const id = agent.session.id
@@ -106,7 +110,9 @@ export function installOrganizationGuard(
         (k) => state.assistant.sessions[k]?.sessionId === id,
       )
       if (!kind && !state.assistant.retiredSessions.includes(id)) return next()
-      const human = messages.find((m) => m.source?.kind === 'user')
+      const human = messages.find(
+        (m) => m.source?.kind === 'user' && m.content?.length,
+      )
       if (
         kind === 'learn' &&
         step === 1 &&
@@ -127,7 +133,7 @@ export function installOrganizationGuard(
         agent.cancel({ kind: 'hook', reason })
         return { kind: 'reject' }
       }
-      if (kind !== 'learn' || step !== 1 || !human?.id) {
+      if (!kind || step !== 1 || !human?.id) {
         agent.cancel({
           kind: 'hook',
           reason:
@@ -135,32 +141,39 @@ export function installOrganizationGuard(
         })
         return { kind: 'reject' }
       }
-      run = arm(kind, agent, human.id)
-      run.turn = turn
-      try {
-        await store.mutate(
-          '开始手动学习回合',
-          (draft) => {
-            const binding = draft.assistant.sessions.learn
-            if (
-              binding?.sessionId !== id ||
-              shouldRotateSession(draft, binding)
-            )
-              throw new Error('学习对话已换新')
-            binding.createdAt ||= binding.startedAt || new Date().toISOString()
-            Object.assign(binding, {
-              status: 'running',
-              startedAt: new Date().toISOString(),
-              requestId: human.id,
-              ownerPid: process.pid,
-              error: '',
-            })
-          },
-          { undoable: false },
-        )
-      } catch (e) {
-        stop(run, e.message)
-        throw e
+      if (kind === 'tasks') {
+        // A human follow-up may discuss the receipt or query current items. It
+        // neither reopens the previous submit tool nor owns an organizer lease.
+        run = arm(kind, agent, human.id, { followup: true })
+      } else {
+        run = arm(kind, agent, human.id)
+        run.turn = turn
+        try {
+          await store.mutate(
+            '开始手动学习回合',
+            (draft) => {
+              const binding = draft.assistant.sessions.learn
+              if (
+                binding?.sessionId !== id ||
+                shouldRotateSession(draft, binding)
+              )
+                throw new Error('学习对话已换新')
+              binding.createdAt ||=
+                binding.startedAt || new Date().toISOString()
+              Object.assign(binding, {
+                status: 'running',
+                startedAt: new Date().toISOString(),
+                requestId: human.id,
+                ownerPid: process.pid,
+                error: '',
+              })
+            },
+            { undoable: false },
+          )
+        } catch (e) {
+          stop(run, e.message)
+          throw e
+        }
       }
     }
     if (run.turn === null) run.turn = turn
@@ -169,7 +182,26 @@ export function installOrganizationGuard(
       (step === 1 && !messages.some((m) => m.id === run.requestId))
     )
       stop(run, '本轮整理与触发消息不一致，已停止')
-    return run.error ? { kind: 'reject' } : next()
+    if (run.error) return { kind: 'reject' }
+    const decision = await next()
+    if (run.kind !== 'tasks' || decision.kind !== 'enter') return decision
+    // DSH can offer text sent while busy as input to the next *step*. Keep it
+    // for its own turn instead of feeding it into a sealed or in-flight batch.
+    const later = decision.messages.filter(
+      (m) =>
+        m.source?.kind === 'user' &&
+        m.id !== run.requestId &&
+        m.content?.length,
+    )
+    if (!later.length) return decision
+    for (const message of later) agent.followup(message)
+    const queued = new Set(later.map((m) => m.id))
+    return {
+      ...decision,
+      messages: messages.every((m) => queued.has(m.id))
+        ? []
+        : decision.messages.filter((m) => !queued.has(m.id)),
+    }
   })
   // Admit the first request normally. A new request needs a receipt from the
   // preceding step. Allow a recovery/submit turn for an unproductive read;
@@ -194,7 +226,8 @@ export function installOrganizationGuard(
             message.content.some(
               (block) =>
                 block.type === 'tool-call' &&
-                !allowed[run.kind].includes(block.name),
+                !allowed[run.kind].includes(block.name) &&
+                !(run.kind === 'tasks' && followupTools.includes(block.name)),
             ),
         )
       ) {
@@ -286,7 +319,7 @@ export function installOrganizationGuard(
     }
     if (event.type === 'turn/end') {
       release(run)
-      if (!run.error) {
+      if (!run.error && !run.followup) {
         const error =
           reason?.kind === 'completed'
             ? run.sealed

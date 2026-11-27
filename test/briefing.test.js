@@ -8,7 +8,7 @@ const NOW = new Date('2026-11-09T09:00:00+08:00') // 周一；昨天本地 = 202
 test('buildBriefing：昨日完成/到期逾期/进行中执行者/受阻/待验收/灵感都进入文本', () => {
   const draft = migrateState({})
   applyOps(draft, [
-    { op: 'add_task', title: '整理 pitch 分享内容', status: 'doing' },
+    { op: 'add_task', title: '整理读书会分享提纲', status: 'doing' },
     { op: 'add_task', title: '交周报', due: '2026-11-08' },
     { op: 'add_task', title: '订会议室', due: '2026-11-09' },
     { op: 'add_task', title: '等外部接口', status: 'blocked' },
@@ -16,7 +16,7 @@ test('buildBriefing：昨日完成/到期逾期/进行中执行者/受阻/待验
     { op: 'add_review', kind: 'subagent', title: '数据抓取完成', dedupeKey: 'subagent:b1' },
     { op: 'capture_idea', text: '给工作台加个统计页' },
   ])
-  applyOps(draft, [{ op: 'update_task', id: draft.tasks.find((row) => row.title === '整理 pitch 分享内容').id, progress: '大纲完成', progressSession: 'session-a' }])
+  applyOps(draft, [{ op: 'update_task', id: draft.tasks.find((row) => row.title === '整理读书会分享提纲').id, progress: '大纲完成', progressSession: 'session-a' }])
   draft.tasks.find((row) => row.title === '昨天的活').completedAt = '2026-11-08T20:00:00+08:00'
   const briefing = buildBriefing(draft, NOW)
   assert.equal(briefing.date, '2026-11-09')
@@ -26,7 +26,7 @@ test('buildBriefing：昨日完成/到期逾期/进行中执行者/受阻/待验
   assert.ok(briefing.text.includes('昨日完成 1 件：昨天的活'))
   assert.ok(briefing.text.includes('今日到期 2 件（其中逾期 1）'))
   assert.ok(briefing.text.includes('交周报（逾期）'))
-  assert.ok(briefing.text.includes('进行中 1 件：整理 pitch 分享内容（1 位执行者）'))
+  assert.ok(briefing.text.includes('进行中 1 件：整理读书会分享提纲（1 位执行者）'))
   assert.ok(briefing.text.includes('受阻 1 件：等外部接口'))
   assert.ok(briefing.text.includes('待验收 1 条'))
   assert.ok(briefing.text.includes('灵感池 1 条'))

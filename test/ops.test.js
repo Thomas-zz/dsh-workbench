@@ -147,7 +147,7 @@ test('countsOf 汇总', () => {
 
 test('update_task progress：追加时间线（会话/外部执行者两种身份），超量裁剪', () => {
   const draft = base()
-  applyOps(draft, [{ op: 'add_task', title: '整理 pitch 分享内容', status: 'doing' }])
+  applyOps(draft, [{ op: 'add_task', title: '整理读书会分享提纲', status: 'doing' }])
   const task = draft.tasks[0]
   const result = applyOps(draft, [
     { op: 'update_task', id: task.id, progress: '已开始整理大纲', progressSession: 'session-a' },
@@ -175,7 +175,7 @@ test('update_task progress：追加时间线（会话/外部执行者两种身�
 
 test('add_review：summary 与挂靠 taskId（任务不存在时留空）', () => {
   const draft = base()
-  applyOps(draft, [{ op: 'add_task', title: '整理 pitch 分享内容', status: 'doing' }])
+  applyOps(draft, [{ op: 'add_task', title: '整理读书会分享提纲', status: 'doing' }])
   const task = draft.tasks[0]
   applyOps(draft, [{ op: 'add_review', kind: 'subagent', title: '大纲完成', summary: '大纲共 5 节，第一节…', sessionId: 'session-a', taskId: task.id, dedupeKey: 'subagent:r1' }])
   applyOps(draft, [{ op: 'add_review', kind: 'job', title: '跑批', summary: '状态：finished', taskId: 't_不存在', dedupeKey: 'job:r2' }])

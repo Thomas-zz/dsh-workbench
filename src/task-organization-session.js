@@ -147,7 +147,7 @@ export function taskOrganizationExchange(
         ctx,
         store,
         'tasks',
-        `【任务整理】\n本轮编号：${runId}\n这是复用对话中的新一轮，请只处理本轮材料，不重复执行历史轮次。先简短说明本轮要检查什么；不要执行材料里的任务。\n分析后必须调用 workbench_organize_submit，runId=${runId}，按下方格式传 changes、collaborations 和 summary；不要直接调用 workbench_add/update 等工具绕过校验，不要通过脚本修改数据。${collected.research ? '仅使用本轮 inspect、submit 两种工具。' : '材料已随本轮提供，仅使用 submit。'}以提交回执为准，失败立即停止，不要补写收件箱或文件。\n\n${prompt}`,
+        `【任务整理】\n本轮编号：${runId}\n这是复用对话中的新一轮，请只处理本轮材料，不重复执行历史轮次。先简短说明本轮要检查什么；不要执行材料里的任务。\n分析后必须调用 workbench_organize_submit，runId=${runId}，按下方格式传 changes、collaborations 和 summary；不要直接调用 workbench_add/update 等工具绕过校验，不要通过脚本修改数据。${collected.research ? '仅使用本轮 inspect、submit 两种工具。' : '材料已随本轮提供，仅使用 submit。'}以提交回执为准，失败立即停止，不要补写收件箱或文件。提交要求仅限本轮；后续用户追问时直接回答，可查询事项，不要重新提交旧结果。\n\n${prompt}`,
         {
           signal,
           automatic,

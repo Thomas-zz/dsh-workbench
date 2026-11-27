@@ -29,10 +29,10 @@ after(async () => {
 // ---------- heuristic ----------
 
 test('heuristic：问号与疑问词识别，命令/JSON/环境注入被排除', () => {
-  assert.equal(isLikelyQuestion('什么是sdk，数据库的sdk是啥'), true)
+  assert.equal(isLikelyQuestion('打雷和闪电的原理是什么'), true)
   assert.equal(isLikelyQuestion('npm run dev还是不行啊，是node版本问题吗'), false)
   assert.equal(isLikelyQuestion('为什么跨域请求会被浏览器拦截'), true)
-  assert.equal(isLikelyQuestion('12和13为什么还是进行中'), false)
+  assert.equal(isLikelyQuestion('3号和5号为什么还是没轮到'), false)
   assert.equal(isLikelyQuestion('不能放到右边吗，你自己不能跑一下看看吗'), false)
   assert.equal(isLikelyQuestion('你给画个图，现在的调用关系是怎样的'), false)
   assert.equal(isLikelyQuestion('提交到测试分支'), false)
@@ -44,16 +44,16 @@ test('heuristic：问号与疑问词识别，命令/JSON/环境注入被排除',
 })
 
 test('heuristic：dedupeKey 忽略标点与大小写，extractCandidates 去重排序', () => {
-  assert.equal(dedupeKey('什么是 SDK？'), dedupeKey('什么是sdk'))
+  assert.equal(dedupeKey('什么是 ORM？'), dedupeKey('什么是 orm'))
   const messages = [
-    { source: 'zcode', text: '什么是sdk？', at: '2026-11-10T01:00:00.000Z' },
-    { source: 'claude', text: '什么是sdk！！', at: '2026-11-10T02:00:00.000Z' },
+    { source: 'zcode', text: '什么是 orm？', at: '2026-11-10T01:00:00.000Z' },
+    { source: 'claude', text: '什么是 orm！！', at: '2026-11-10T02:00:00.000Z' },
     { source: 'zcode', text: '为什么要有网关', at: '2026-11-10T03:00:00.000Z' },
     { source: 'zcode', text: '修一下登录bug', at: '2026-11-10T04:00:00.000Z' },
   ]
   const candidates = extractCandidates(messages, { excludeKeys: new Set([dedupeKey('为什么要有网关')]) })
   assert.equal(candidates.length, 1)
-  assert.match(candidates[0].text, /sdk/)
+  assert.match(candidates[0].text, /orm/)
 })
 
 // ---------- zstd 帧切分 ----------
@@ -79,7 +79,7 @@ test('zcode：按窗口取 prompt 并带出项目目录', async () => {
     text text not null, kind text not null, time_created integer not null)`)
   const now = Date.now()
   const insert = db.prepare('INSERT INTO input_history VALUES (?, ?, ?, ?, ?, ?)')
-  insert.run('1', 'p', 'sess_a', '什么是 sdk', 'prompt', now - HOUR)
+  insert.run('1', 'p', 'sess_a', '什么是 ORM', 'prompt', now - HOUR)
   insert.run('2', 'p', 'sess_a', '继续上面的任务', 'prompt', now - 2 * HOUR)
   insert.run('3', 'p', 'sess_a', '太老的提问', 'prompt', now - 48 * HOUR)
   insert.run('4', 'p', 'sess_a', '工具自动补全的候选项', 'completion', now - HOUR)
@@ -87,7 +87,7 @@ test('zcode：按窗口取 prompt 并带出项目目录', async () => {
   db.close()
   const rows = await scanZcode({ sinceMs: now - 6 * HOUR, home })
   assert.equal(rows.length, 2)
-  assert.deepEqual(rows.map((row) => row.text).sort(), ['什么是 sdk', '继续上面的任务'])
+  assert.deepEqual(rows.map((row) => row.text).sort(), ['什么是 ORM', '继续上面的任务'])
   assert.equal(rows[0].project, '/Users/x/proj')
   assert.equal(rows[0].source, 'zcode')
 })

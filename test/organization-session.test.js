@@ -355,12 +355,12 @@ test('事故旧历史按越权记录而非大小隔离，首个请求不到达�
 test('重放失败提交后试图写 ignore 和执行 shell：任务停止、零后续请求、零工具副作用，定时不重试', async (t) => {
   const { organizerDue } = await import('../src/organizer.js')
   const store = await fixture(t)
-  const ctx = organizationContext(() => ({
-    changes: [
-      { evidenceKeys: ['不存在的本轮证据'], patch: { title: '不应落盘' } },
-    ],
-    summary: '错误提交',
-  }))
+  const ctx = organizationContext()
+  const mutate = store.mutate.bind(store)
+  t.mock.method(store, 'mutate', (label, ...args) => {
+    if (label === '后台整理任务') throw new Error('写盘失败')
+    return mutate(label, ...args)
+  })
   await store.mutate('准备', (s) => {
     s.plan.config.enabled = true
     applyOps(s, [{ op: 'capture_idea', text: '我需要复核上线结果' }])
@@ -368,6 +368,7 @@ test('重放失败提交后试图写 ignore 和执行 shell：任务停止、零
   const result = await runOrganizer(ctx, store, { trigger: 'manual' })
   await ctx.idle()
   assert.equal(result.status, 'error')
+  assert.match(result.error, /写盘失败/)
   const [id] = ctx.created,
     agent = ctx.agents.get(id)
   assert.equal(agent.status, 'idle')
@@ -574,4 +575,113 @@ test('安全暂停跨天和换新保留，仅本类手动成功提交解除；�
   )
   await assert.rejects(stream(active.session.id), /没有定时整理授权/)
   assert.equal(calls.length, 1)
+})
+
+test('任务整理回执后可在原对话连续追问、查询；不复用提交权限或改写原回执', async (t) => {
+  const store = await fixture(t),
+    ctx = organizationContext()
+  const { sessionId } = await runOrganizer(ctx, store, { trigger: 'manual' })
+  await ctx.idle()
+  const agent = ctx.agents.get(sessionId)
+  const { stream } = meteredAdapter(ctx)
+  const binding = structuredClone((await store.read()).assistant.sessions.tasks)
+  const message = (id) => ({
+    id,
+    source: { kind: 'user' },
+    content: [{ type: 'text', text: '为什么这样排？' }],
+  })
+  const step = (turn, step, messages) =>
+    ctx.waterfall('agent/pre-step', { agent, turn, step, messages }, () => ({
+      kind: 'enter',
+      messages,
+    }))
+  for (const turn of [51, 52]) {
+    assert.equal((await step(turn, 1, [message(`user-${turn}`)])).kind, 'enter')
+    assert.deepEqual(agent.allowed, ['workbench_query'])
+    await stream(sessionId)
+    const exec = { agent, name: 'workbench_query', arguments: { view: 'all' } }
+    assert.equal(
+      await ctx.waterfall('tools/pre-execute', exec, () => 'allowed'),
+      'allowed',
+    )
+    ctx.notify('tools/result', exec, { value: { data: {} } })
+    await stream(sessionId)
+    ctx.emit(sessionId, 'turn/end', { turn, reason: { kind: 'completed' } })
+    assert.equal(agent.allowed, undefined)
+  }
+  assert.deepEqual((await store.read()).assistant.sessions.tasks, binding)
+  assert.deepEqual(await step(53, 2, [message('orphan')]), { kind: 'reject' })
+  assert.equal((await step(54, 1, [message('user-54')])).kind, 'enter')
+  const queued = []
+  agent.followup = (m) => queued.push(m)
+  const extra = message('extra')
+  assert.deepEqual(await step(54, 2, [extra]), { kind: 'enter', messages: [] })
+  assert.deepEqual(queued, [extra])
+  const denied = await ctx.waterfall(
+    'tools/pre-execute',
+    { agent, name: 'workbench_organize_submit' },
+    () => assert.fail(),
+  )
+  assert.equal(denied.kind, 'deny')
+})
+
+test('事项池整理只排序和补估时，提交时重新检查项目、池和手动修改；空池不调用模型', async (t) => {
+  const store = await fixture(t)
+  const ids = await store.mutate(
+    '池内外样例',
+    (s) =>
+      applyOps(
+        s,
+        [
+          { title: '待排序' },
+          { title: '已有估时', estimateMinutes: 45 },
+          { title: '稍后移入周池' },
+          { title: '另一项目', project: '乙' },
+          { title: '已完成', status: 'done' },
+        ].map((row) => ({ op: 'add_task', project: '甲', ...row })),
+      ).targets,
+  )
+  const ctx = organizationContext(async (_, prompt) => {
+    assert.match(prompt, /待排序/)
+    assert.doesNotMatch(prompt, /另一项目|已完成/)
+    await store.mutate('用户移入周池', (s) =>
+      applyOps(s, [
+        { op: 'update_task', id: ids[2], plannedWeek: '2030-01-07' },
+      ]),
+    )
+    return {
+      changes: ids.map((id) => ({
+        id,
+        patch: { order: 8, estimateMinutes: 20 },
+      })),
+      collaborations: [{ title: '不应新增' }],
+    }
+  })
+  const result = await runOrganizer(ctx, store, {
+    trigger: 'manual',
+    mode: 'pool',
+    project: '甲',
+    collect: () => assert.fail(),
+  })
+  await ctx.idle()
+  assert.equal(result.status, 'completed')
+  assert.equal(result.updated, 2)
+  const s = await store.read()
+  assert.equal(s.reviews.length, 0)
+  assert.equal(s.tasks.length, ids.length)
+  const rows = ids.map((id) => s.tasks.find((t) => t.id === id))
+  assert.equal(rows[0].estimateMinutes, 20)
+  assert.equal(rows[0].plannedDate, null)
+  assert.equal(rows[1].estimateMinutes, 45)
+  assert.deepEqual(
+    rows.map((t) => t.order),
+    [8, 8, 0, 0, 0],
+  )
+  const empty = await runOrganizer(ctx, store, {
+    trigger: 'manual',
+    mode: 'pool',
+    project: '空项目',
+  })
+  assert.equal(empty.updated, 0)
+  assert.equal(ctx.cards.length, 1)
 })

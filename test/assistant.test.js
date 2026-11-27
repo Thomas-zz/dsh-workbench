@@ -384,7 +384,7 @@ test('估时期间拖到另一日仍可补估时，期间手动改估时以用�
   await runOrganizer({}, store, {
     mode: 'estimate',
     trigger: 'manual',
-    generate: async (ctx, base, collected) => {
+    generate: async () => {
       await store.mutate('同时调整', (s) => {
         op(s, { op: 'plan_move', id: a, date: '2026-11-14', startMinute: 600 })
         op(s, { op: 'update_task', id: b, estimateMinutes: 75 })
@@ -392,7 +392,6 @@ test('估时期间拖到另一日仍可补估时，期间手动改估时以用�
       return {
         changes: [a, b].map((id) => ({
           id,
-          evidenceKeys: [collected.messages[0].key],
           patch: { estimateMinutes: 45 },
         })),
       }

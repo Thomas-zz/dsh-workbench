@@ -20,6 +20,7 @@ import {
   weekOf,
   dayTasks,
   overlapLayout,
+  openTask,
 } from '../../src/planner.js'
 import {
   poolTasks,
@@ -429,6 +430,7 @@ function TimeLane({ date, tasks, allTasks, entries, create }) {
 }
 export function PlannerView({ entryDrafts }) {
   const entries = useEntryEditing(entryDrafts)
+  const organizerPending = useDesk((s) => s.organizationPending?.tasks)
   const poolFocus = useDesk((s) => s.poolFocus)
   const state = useDesk((s) => s.state),
     focus = useDesk((s) => s.focusTaskId),
@@ -702,6 +704,25 @@ export function PlannerView({ entryDrafts }) {
                 周事项 <span>{poolTasks(state, week).length}</span>
               </button>
             </div>
+            {pool === 'backlog' && (
+              <button
+                className="pd-pool-organize"
+                disabled={
+                  organizerPending ||
+                  !!state.plan.organizer.lease ||
+                  !poolRows.some(openTask)
+                }
+                title="整理当前范围内的待安排事项：排序、补估时，不安排日期"
+                onClick={() =>
+                  runPlanOrganizer({ mode: 'pool', project: filter })
+                }
+              >
+                {state.plan.organizer.lease &&
+                state.plan.organizer.runs[0]?.mode === 'pool'
+                  ? '正在整理…'
+                  : 'AI 整理待安排事项'}
+              </button>
+            )}
             {pool === 'week' && (
               <div className="pd-pool-week">
                 <button

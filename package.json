@@ -1,6 +1,6 @@
 {
   "name": "dsh-workbench",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "DeepSeek Harness 个人工作台：日周月计划、自动顺延、后台收集排期与学习。",
   "type": "module",
   "private": true,
@@ -40,7 +40,10 @@
     "watch": "node scripts/build.mjs --watch",
     "test": "node --test",
     "preview": "node scripts/preview.mjs",
-    "dev:web": "node scripts/dev-web.mjs"
+    "dev:web": "node scripts/dev-web.mjs",
+    "channel": "node scripts/channel.mjs",
+    "audit": "node scripts/release-audit.mjs",
+    "release": "node scripts/release.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.25.10",

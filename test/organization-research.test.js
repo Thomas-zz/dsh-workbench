@@ -181,15 +181,14 @@ test('原文读取失败保留来源进度；搜索片段不能绕过实际证�
     { action: 'search', query: '验收' },
     readStore(s),
   )
-  assert.throws(
-    () =>
-      applyOrganization(s, structuredClone(s), c, {
-        changes: [
-          { evidenceKeys: [hits.hits[0].key], patch: { title: '验收原型' } },
-        ],
-      }),
-    /缺少来源依据/,
-  )
+  applyOrganization(s, structuredClone(s), c, {
+    changes: [
+      { evidenceKeys: [hits.hits[0].key], patch: { title: '验收原型' } },
+    ],
+  })
+  assert.equal(s.tasks.length, 0)
+  assert.equal(s.reviews.length, 0)
+  assert.match(c.collaborationSkipped[0].reason, /来源依据/)
   await assert.rejects(
     c.research.inspect({ action: 'read', ref: 'codex:thread' }, readStore(s)),
     /暂时/,
@@ -222,8 +221,9 @@ test('通过真实检索工具提交、保存与回执一致，检索只允许�
           },
           patch: { title: '验收原型' },
         },
+        { id: 'unverified-task', patch: { status: 'done' } },
       ],
-      summary: '确认用户待办',
+      summary: '所有任务均已处理',
     }
   })
   t.after(() => installOrganizationSessions(ctx, store).dispose())
@@ -234,6 +234,15 @@ test('通过真实检索工具提交、保存与回执一致，检索只允许�
   await ctx.idle()
   assert.equal(result.added, 1)
   const saved = await store.read()
+  assert.equal(result.status, 'partial')
+  assert.equal(saved.plan.organizer.runs[0].status, 'partial')
+  assert.equal(ctx.receipts[0].status, 'partial')
+  assert.deepEqual(
+    ctx.receipts[0].taskSkipped,
+    saved.plan.organizer.runs[0].taskSkipped,
+  )
+  assert.match(ctx.receipts[0].taskSkipped[0].reason, /来源依据/)
+  assert.doesNotMatch(ctx.receipts[0].summary, /所有任务均已处理/)
   assert.equal(saved.tasks[0].origin.kind, 'auto')
   assert.equal(saved.tasks[0].origin.source, 'codex')
   assert.equal(saved.plan.organizer.processed.length, 1)

@@ -307,3 +307,53 @@ test('安排未来目标日只带入过期事项，不搬走今天与其他未�
   assert.equal(saved(s, todayTask).plannedDate, today)
   assert.equal(saved(s, future).plannedDate, '2026-11-19')
 })
+
+// Regression: one real submission mixed sourced facts and a series of plan-only patches.
+test('批量提交逐项处理：计划内排序估时不用抄证据，不借计划修改事实或覆盖手填值', () => {
+  const s = state()
+  const a = add(s, { title: '复核事项', plannedDate: today })
+  const b = add(s, { title: '范围外事项' })
+  const c = add(s, { title: '有本人估时', plannedDate: today })
+  applyOps(s, [{ op: 'update_task', id: c.id, estimateMinutes: 45 }])
+  const evidence = {
+    key: 'msg',
+    role: 'user',
+    source: 'codex',
+    sessionId: 't',
+    at: instant.toISOString(),
+    text: '我会归还借书',
+  }
+  const inputs = collect([evidence], {
+    planning: { date: today, taskIds: [a.id, c.id], requestKey: 'plan' },
+  })
+  const result = applyOrganization(s, structuredClone(s), inputs, {
+    changes: [
+      { id: a.id, patch: { order: 7, estimateMinutes: 25 } },
+      { id: b.id, evidenceKeys: ['unknown'], patch: { estimateMinutes: 60 } },
+      { id: c.id, evidenceKeys: [], patch: { estimateMinutes: 90 } },
+      { id: a.id, patch: { order: 99, status: 'done' } },
+      {
+        scope: 'standalone',
+        evidenceKeys: ['msg'],
+        ownership: {
+          kind: 'user_action',
+          evidenceKey: 'msg',
+          quote: evidence.text,
+        },
+        patch: { title: '归还借书' },
+      },
+    ],
+    collaborations: [{ title: '无依据协作' }],
+    summary: '所有建议已执行',
+  })
+  assert.equal(result.added, 1)
+  assert.equal(saved(s, a).estimateMinutes, 25)
+  assert.equal(saved(s, a).order, 7)
+  assert.notEqual(saved(s, a).status, 'done')
+  assert.equal(saved(s, b).estimateMinutes, null)
+  assert.equal(saved(s, c).estimateMinutes, 45)
+  assert.equal(inputs.taskSkipped.length, 2)
+  assert.equal(inputs.collaborationSkipped.length, 1)
+  assert.match(s.plan.organizer.error, /3 条建议未采用/)
+  assert.doesNotMatch(s.plan.organizer.lastSummary, /所有建议已执行/)
+})

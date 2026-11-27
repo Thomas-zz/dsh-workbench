@@ -22,8 +22,8 @@ function run(home, args, { expectFail = false } = {}) {
 test('CLI：add 幂等 / progress / update / query 全链路', () => {
   const home = mkdtempSync(join(tmpdir(), 'dsh-workbench-cli-'))
   try {
-    const added = run(home, ['add', '整理 pitch 分享内容', '--priority', '2', '--focus'])
-    assert.ok(added.includes('已登记任务「整理 pitch 分享内容」'))
+    const added = run(home, ['add', '整理读书会分享提纲', '--priority', '2', '--focus'])
+    assert.ok(added.includes('已登记任务「整理读书会分享提纲」'))
     let state = JSON.parse(readFileSync(join(home, 'workbench', 'state.json'), 'utf8'))
     assert.equal(state.tasks.length, 1)
     assert.equal(state.tasks[0].origin.kind, 'zcode')
@@ -31,18 +31,18 @@ test('CLI：add 幂等 / progress / update / query 全链路', () => {
     assert.equal(state.tasks[0].focus, true)
 
     // 同名未完结任务已存在：跳过，不重复登记
-    const again = run(home, ['add', '整理 pitch 分享内容'])
+    const again = run(home, ['add', '整理读书会分享提纲'])
     assert.ok(again.includes('跳过登记'))
     state = JSON.parse(readFileSync(join(home, 'workbench', 'state.json'), 'utf8'))
     assert.equal(state.tasks.length, 1)
 
-    const progressed = run(home, ['progress', 'pitch', '素材已抓取完毕，开始排版'])
+    const progressed = run(home, ['progress', '读书会', '素材已抓取完毕，开始排版'])
     assert.ok(progressed.includes('已记录进展'))
     state = JSON.parse(readFileSync(join(home, 'workbench', 'state.json'), 'utf8'))
     assert.equal(state.tasks[0].progress.length, 1)
     assert.equal(state.tasks[0].progress[0].actor, 'ZCode')
 
-    run(home, ['update', 'pitch', '--status', 'done'])
+    run(home, ['update', '读书会', '--status', 'done'])
     state = JSON.parse(readFileSync(join(home, 'workbench', 'state.json'), 'utf8'))
     assert.equal(state.tasks[0].status, 'done')
     assert.ok(state.tasks[0].completedAt)

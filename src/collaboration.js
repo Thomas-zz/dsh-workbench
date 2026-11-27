@@ -23,7 +23,7 @@ export function applyCollaborations(
   }
   const affected = [],
     skipped = []
-  if (['schedule', 'estimate'].includes(collected.mode))
+  if (['schedule', 'estimate', 'pool'].includes(collected.mode))
     return { counts, affected, skipped }
   const messages = new Map(
     [...collected.messages, ...(collected.context || [])].map((m) => [
@@ -32,16 +32,36 @@ export function applyCollaborations(
     ]),
   )
   const fresh = new Map(collected.messages.map((m) => [m.key, m]))
-  const apply = (op) => {
-    const result = applyOps(draft, [op])
-    if (result.errors.length) throw new Error(result.errors.join('；'))
-    return result
-  }
   for (const proposal of proposals) {
-    const evidence = (proposal.evidenceKeys || [])
+    const id = proposal?.id || proposal?.taskId
+    const label = {
+      id: typeof id === 'string' ? id : undefined,
+      title: typeof proposal?.title === 'string' ? proposal.title : undefined,
+    }
+    const evidence = (
+      Array.isArray(proposal?.evidenceKeys) ? proposal.evidenceKeys : []
+    )
       .map((key) => messages.get(key))
       .filter(Boolean)
-    if (!evidence.length) throw new Error('待协作变更缺少来源依据')
+    if (!evidence.length) {
+      skipped.push({
+        ...label,
+        reason: '没有可核对的来源依据',
+        needsReview: true,
+      })
+      continue
+    }
+    // An operation validation error rejects this proposal; storage errors still fail the run.
+    const apply = (op) => {
+      const result = applyOps(draft, [op])
+      if (!result.errors.length) return result
+      skipped.push({
+        ...label,
+        reason: result.errors.join('；'),
+        needsReview: true,
+      })
+      return null
+    }
     const record = (review, action) =>
       affected.push({
         id: review.id,
@@ -56,7 +76,7 @@ export function applyCollaborations(
       const original = base.reviews.find((r) => r.id === proposal.id)
       if (!review || review.status !== 'pending' || !same(review, original)) {
         skipped.push({
-          id: proposal.id,
+          ...label,
           reason: '条目已处理或在整理期间发生变化',
         })
         continue
@@ -81,7 +101,10 @@ export function applyCollaborations(
         skipped.push({ id: review.id, reason: '缺少对应对话的后续处理证据' })
         continue
       }
-      apply({ op: 'decide_review', id: review.id, action: proposal.status })
+      if (
+        !apply({ op: 'decide_review', id: review.id, action: proposal.status })
+      )
+        continue
       counts.collaborationResolved++
       record(review, proposal.status)
       continue
@@ -108,12 +131,13 @@ export function applyCollaborations(
         )
       ) {
         skipped.push({
-          id: proposal.taskId,
+          ...label,
           reason: '保留已安排、手动修改或缺少关联证据的事项，可手动移到待协作',
         })
         continue
       }
       const result = apply({ op: 'move_to_collaboration', id: task.id })
+      if (!result) continue
       const review = draft.reviews.find((r) => r.id === result.targets[0])
       counts.collaborationMoved++
       record(review, 'moved')
@@ -121,10 +145,15 @@ export function applyCollaborations(
     }
     if (proposal.status && proposal.status !== 'pending') continue
     const ownership = personalOwnership(proposal, fresh)
-    if (!ownership || !proposal.title?.trim()) {
+    if (
+      !ownership ||
+      typeof proposal.title !== 'string' ||
+      !proposal.title.trim()
+    ) {
       skipped.push({
-        title: proposal.title,
+        ...label,
         reason: '缺少新的本人协作请求或责任依据',
+        needsReview: true,
       })
       continue
     }
@@ -197,7 +226,7 @@ export function applyCollaborations(
         quote: text.slice(0, 500),
       })),
     })
-    if (!result.results[0].deduped) {
+    if (result && !result.results[0].deduped) {
       counts.collaborationAdded++
       record(
         draft.reviews.find((r) => r.id === result.targets[0]),

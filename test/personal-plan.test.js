@@ -28,11 +28,11 @@ const change = (m, kind, title = m.text) => ({
 
 test('个人行动、确认与委托执行分开，助手自述、伪造证据不得入库', () => {
   const rows = [
-    message('a', 'assistant', '我会启动 demo-frontend 供用户继续联调测试'),
+    message('a', 'assistant', '我会先把示例服务启动起来'),
     message('b', 'user', '帮我把导出时的条件摘要修改成易读形式'),
     message('c', 'user', '我明天验收发布效果'),
     message('d', 'assistant', '请你确认采用哪一个方案'),
-    message('e', 'assistant', '接下来需要提交并推送 luanji 和 workbench 代码'),
+    message('e', 'assistant', '接下来需要把示例数据补齐再重跑一遍'),
   ]
   const state = migrateState({ tasks: [] })
   const changes = [

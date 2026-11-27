@@ -151,7 +151,7 @@ export async function route(ctx, store, config, req, res, signal) {
     case 'plan/run-now': {
       if (body.mode === 'decompose') return json(res, 409, { error: '自动拆分已关闭，请保留完整事项或手动添加行动' })
       const result = await new Promise((resolve, reject) => {
-        runOrganizer(ctx, store, { signal, trigger: 'manual', mode: ['schedule','estimate'].includes(body.mode) ? body.mode : 'collect', date: body.date, goalId: body.goalId, calendarExecutable: config.larkCliPath, onSessionReady: (sessionId) => resolve({status:'running',sessionId}) }).then(resolve, reject)
+        runOrganizer(ctx, store, { signal, trigger: 'manual', mode: body.mode ?? 'collect', project: body.project, date: body.date, goalId: body.goalId, calendarExecutable: config.larkCliPath, onSessionReady: (sessionId) => resolve({status:'running',sessionId}) }).then(resolve, reject)
       })
       return json(res, result.status === 'error' ? 500 : 202, result)
     }

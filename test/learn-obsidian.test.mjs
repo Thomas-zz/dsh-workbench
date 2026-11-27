@@ -24,7 +24,7 @@ const target = () => ({ vaultPath: vault, notesDir: 'AI/Agent学习' })
 test('writeLearnNote：frontmatter + 三段正文 + 中文文件名', async () => {
   const { path, created } = await writeLearnNote(target(), {
     title: 'SDK 是什么',
-    question: '什么是sdk，数据库的sdk是啥',
+    question: 'SDK 是做什么的',
     category: 'term',
     concept: 'SDK',
     answer: 'SDK 是对接某系统的一组封装好的库与工具。',

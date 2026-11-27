@@ -25,7 +25,7 @@ test('学习阅读边界、跨页引用、重启续读及失败来源补读；�
   let state = migrateState(null)
   state.assistant.sessions.learn = { sessionId: 'session-self' }
   const questions = [
-    row('为什么查总数这么慢，你怎么优化的'),
+    row('为什么海水是咸的，你怎么解释'),
     row('A'.repeat(16000), { role: 'assistant' }),
     row('是你误解了我的问题'),
   ]

@@ -475,6 +475,7 @@ export function AssistantActivity() {
       collect: '收集个人事项',
       schedule: '安排当天时间',
       estimate: '估计默认用时',
+      pool: '整理待安排事项',
       decompose: '拆分阶段行动',
     },
     statuses = {
@@ -612,6 +613,16 @@ export function AssistantActivity() {
                     </p>
                   ))}
                 </div>
+              )}
+              {run.taskSkipped?.length > 0 && (
+                <details className="wb-run-inputs">
+                  <summary>未采用的事项建议 · {run.taskSkipped.length}</summary>
+                  {run.taskSkipped.map((row, i) => (
+                    <p key={i}>
+                      {row.title || row.id || '未命名事项'}：{row.reason}
+                    </p>
+                  ))}
+                </details>
               )}
               {run.collaborationSkipped?.length > 0 && (
                 <details className="wb-run-inputs">

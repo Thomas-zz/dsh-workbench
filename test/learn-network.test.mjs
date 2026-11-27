@@ -85,7 +85,7 @@ test('上下文线索保留非问句、相邻输入与来源，不把推测当�
 
 test('AI 建议有依据与关系才写入，元数据迁移后仍保留',async(t)=>{
   const {store}=await fixture(t);const tools={};registerLearnTools({tools:{register(def){tools[def.name]=def;return()=>{}}}},store)
-  const item={title:'连接池与线程池',question:'连接池与线程池有什么关系',answer:'它们分别复用连接和线程，都是通过管理有限资源来控制并发。',category:'know',kind:'suggested',parentIds:['root']}
+  const item={title:'连接超时与重试',question:'连接超时后该怎么重试',answer:'超时后按退避策略有限次重试，避免持续压垮下游。',category:'know',kind:'suggested',parentIds:['root']}
   assert.equal((await tools.workbench_learn_write.execute({items:[item]})).ok,false)
   const written=await tools.workbench_learn_write.execute({items:[{...item,evidence:'用户追问连接复用，可进一步比较其他资源池'}]})
   assert.equal(written.ok,true);assert.ok(written.reportAbsolutePath.startsWith('/'))
